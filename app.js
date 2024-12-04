@@ -16,8 +16,11 @@ connectDB()
 const findOrCreateDocument = async (id) => {
   if (!id) return;
   const document = await Document.findById(id);
-  if (document) return document;
-  return await Document.create({ _id: id, data: "" });
+  if (document) {
+    document.users++;
+    return await document.save();
+  };
+  return await Document.create({ _id: id, data: "", users: 1 });
 };
 
 const app = express();
@@ -25,16 +28,19 @@ const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "https://frontend-collaborative-text-editor.vercel.app",
+    origin: ["https://frontend-collaborative-text-editor.vercel.app", "http://localhost:5173"],
     methods: ["GET", "POST"],
   },
 });
 
 io.on("connection", (socket) => {
+  const doc_id = socket.handshake.query.id;
   socket.on("get-document", async (id) => {
     const document = await findOrCreateDocument(id);
     socket.join(id);
-    socket.emit("load-document", document.data);
+    // socket.emit("total-user", document.users);
+    socket.broadcast.to(id).emit("total-user", document.users);
+    socket.emit("load-document", {data: document.data, users: document.users});
     socket.on("send-changes", (data) => {
       socket.broadcast.to(id).emit("receive-changes", data);
     });
@@ -43,8 +49,12 @@ io.on("connection", (socket) => {
       await Document.findByIdAndUpdate(id, { data: data });
     });
   });
-  socket.on("disconnect", () => {
-    console.log("user disconnected");
+  socket.on("disconnect", async () => {
+    const id = doc_id;
+    const doc = await Document.findById(id);
+    doc.users--;
+    await doc.save();
+    socket.broadcast.to(id).emit("total-user", doc.users);
   });
 });
 
