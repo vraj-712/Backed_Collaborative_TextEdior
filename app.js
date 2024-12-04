@@ -25,7 +25,7 @@ const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: "https://frontend-collaborative-text-editor.vercel.app",
     methods: ["GET", "POST"],
   },
 });
